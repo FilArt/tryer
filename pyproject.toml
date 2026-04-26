@@ -1,0 +1,12 @@
+[project]
+name = "media-bot"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.0.0",
+    "python-telegram-bot>=21.0",
+    "qbittorrent-api>=2024.1.0",
+]
+
+[project.scripts]
+media-bot = "media_bot.main:main"

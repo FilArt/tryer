@@ -38,6 +38,54 @@ OPENAI_MODEL=local
 python -m media_bot.main
 ```
 
+With Nix:
+
+```sh
+nix run
+```
+
+## NixOS service
+
+Import this flake's NixOS module and enable the service:
+
+```nix
+{
+  inputs.media-bot.url = "path:/path/to/media-bot";
+
+  outputs = {nixpkgs, media-bot, ...}: {
+    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        media-bot.nixosModules.default
+        {
+          services.media-bot = {
+            enable = true;
+            environmentFile = "/run/secrets/media-bot.env";
+            settings = {
+              QBITTORRENT_HOST = "http://127.0.0.1:8080";
+              DOWNLOAD_DIR = "/downloads";
+              MOVIES_DIR = "/media/movies";
+              SERIES_DIR = "/media/series";
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+Put secrets in the environment file:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=http://127.0.0.1:8081/v1
+OPENAI_MODEL=local
+```
+
+The service stores its default SQLite database at `/var/lib/media-bot/media_bot.sqlite3`.
+
 Ask the model from Telegram:
 
 ```text

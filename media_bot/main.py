@@ -2,7 +2,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from .config import load_config
@@ -22,14 +22,32 @@ class App:
             self.config.qbittorrent_password,
             self.config.download_dir,
         )
-        self.organizer = Organizer(Planner(self.config.openai_model, self.config.movies_dir, self.config.series_dir))
+        self.planner = Planner(
+            self.config.openai_model,
+            self.config.movies_dir,
+            self.config.series_dir,
+            self.config.openai_api_key,
+            self.config.openai_base_url,
+        )
+        self.organizer = Organizer(self.planner)
         self.pending: dict[str, tuple[int, str, dict]] = {}
+
+    def commands_text(self) -> str:
+        return "\n".join(
+            [
+                "/start - начать",
+                "/status - статус загрузок",
+                "/list - список торрентов",
+                "/ask - спросить модель",
+                "/help - помощь",
+            ]
+        )
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Отправьте magnet-ссылку или .torrent файл.")
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("/start\n/status\n/list\n/help")
+        await update.message.reply_text(self.commands_text())
 
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = self.db.list_recent()
@@ -45,8 +63,27 @@ class App:
             return
         await update.message.reply_text("\n".join(f"{torrent.name}: {float(torrent.progress) * 100:.0f}%" for torrent in torrents))
 
+    async def ask(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        prompt = " ".join(context.args)
+        if not prompt:
+            await update.message.reply_text("Использование: /ask вопрос")
+            return
+        message = await update.message.reply_text("...")
+        answer = ""
+        last_sent = ""
+        for delta in self.planner.ask_stream(prompt):
+            answer += delta
+            if len(answer) - len(last_sent) >= 120:
+                text = answer[:4000] or "..."
+                await message.edit_text(text)
+                last_sent = answer
+        await message.edit_text(answer[:4000] or "Пустой ответ.")
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text or ""
+        if text == "/":
+            await update.message.reply_text(self.commands_text())
+            return
         if text.startswith("magnet:"):
             self.downloader.add_magnet(text)
             name = text[:120]
@@ -126,12 +163,22 @@ class App:
         application.add_handler(CommandHandler("help", self.help))
         application.add_handler(CommandHandler("status", self.status))
         application.add_handler(CommandHandler("list", self.list))
+        application.add_handler(CommandHandler("ask", self.ask))
         application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         return application
 
     async def on_start(self, application: Application):
+        await application.bot.set_my_commands(
+            [
+                BotCommand("start", "начать"),
+                BotCommand("status", "статус загрузок"),
+                BotCommand("list", "список торрентов"),
+                BotCommand("ask", "спросить модель"),
+                BotCommand("help", "помощь"),
+            ]
+        )
         asyncio.create_task(self.poll(application))
 
 

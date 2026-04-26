@@ -1,4 +1,18 @@
 __pycache__/
 *.py[cod]
 .venv/
+.env
 media_bot.sqlite3
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+.codex

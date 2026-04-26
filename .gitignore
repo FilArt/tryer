@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 media_bot.sqlite3
+result
 
 # Devenv
 .devenv*
